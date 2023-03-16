@@ -56,6 +56,34 @@ As above, another possiblity for Windows users is to [download](software.ime.fra
 The substance name and the corresponding set of values for Koc and DegT50 need to be entered into the appropriate input fields. Alternatively, the up- and down arrows can be used. A condensed result is output in the text field box which is updated whenever the input parameters are changed. The result can be copied with the "Copy to Clipboard"-button and pasted into any text editor of choice. 
 Based on the lookup-table and the interpolation method a contour plot is created representing the three mobility classes as function of Koc and DT50. The mobility class of the respective substance is maked with a cross which is updated whenever the input changes.The figure can be saved as a PNG, JPG or PDF file with the "Save Figure"-button.
 
+## leachCalc_CLI
+Calling leachCalc_CLI with `-h` option shows
+
+    >python3 leachCalc_CLI.py -h
+    usage: leachCalc_CLI.py [-h] [-p] [-r] input [input ...]
+    
+    Calculate the mobility of a substance in soil
+
+    positional arguments:
+    input         input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name
+
+    options:
+      -h, --help    show this help message and exit
+      -p, --plot    if set, plot(s) are created
+      -r, --report  if set, report text(s) are created
+
+Possible calls would be
+
+    >python3 leachCalc_CLI.py subst1 200 150
+
+to calculate the leaching of "subst1" with a Koc = 200 mL/g and a DegT50 = 150 d. In the "newly created" results folder a "reports.txt" will be written with the leaching percentage and the substance's mobility.
+
+The inclusion of the `-r/--report` flag appends a short report text.
+
+When `-p/--plot` is set, plot files are created for each substance.
+
+If the standalone .exe is used, swap `python3 leachCalc_CLI.py` for `LEACHCALC.exe` in the commands.
+
 # BUG REPORTS
 
 For reporting bugs, asking questions, giving remarks and suggestions, we welcome you to use the issue tracker: https://github.com/IMEDiman/LeachCalc/issues

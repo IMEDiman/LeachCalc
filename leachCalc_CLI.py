@@ -60,6 +60,7 @@ class LeachCalc_CLI():
         with open(rep_file,'w') as f:
             f.write("# Report file created "+datetime.now().strftime("%d.%m.%y - %H:%M")+"\n")
             f.write("# Substance name\tKoc\tDegT50\tLeaching\tMobility\n")
+            print("# Substance name\tKoc\tDegT50\tLeaching\tMobility\n")
 
         self.dataTable()
         self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
@@ -81,6 +82,7 @@ class LeachCalc_CLI():
             res_perc, mobility, res_report = self.result(koc[isub],dt50[isub],self.subst_name[isub])
             with open(rep_file,'a') as f:
                 f.write(self.subst_name[isub] + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)) + "\t" + mobility + "\n")
+                print(self.subst_name[isub] + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)) + "\t" + mobility + "\n")
                 if input_array.report:
                     f.write(res_report+"\n\n")
 
@@ -274,11 +276,13 @@ class LeachCalc_CLI():
         #self.draw()
 
 
-
-parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil")
+with open("version.txt",'r') as f:
+    version = f.readline()
+parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil",prog='LEACHCALC')
 parser.add_argument('input', nargs='+', help="input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name")
 parser.add_argument('-p','--plot',action='store_true',help="if set, plot(s) are created")
 parser.add_argument('-r','--report',action='store_true',help="if set, report text(s) are created")
+parser.add_argument('-v','--version',action='version',version='%(prog)s '+version,help="show version and exit")
 args = parser.parse_args()
 
 correct_input = True
