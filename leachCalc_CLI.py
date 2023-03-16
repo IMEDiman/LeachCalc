@@ -1,31 +1,19 @@
-from PySide6 import QtWidgets 
-from PySide6.QtCore import QDate,  QTime, QRunnable, Slot, Signal, QThreadPool, QObject, Qt, QRect
-from PySide6.QtGui import Qt,QIcon,QClipboard, QPixmap
-
 import sys
-import pyperclip
 import os
 from scipy.interpolate import RectBivariateSpline
 import matplotlib
-matplotlib.use("Qt5Agg")
-font = {'family' : 'normal',
-#        'weight' : 'bold',
-        'size'   : 7}
+from datetime import datetime
+font = {'size'   : 7}
 
 matplotlib.rc('font', **font)
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.backends import backend_pdf
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 from matplotlib import ticker
 import matplotlib.pyplot as plt
 import numpy as np
-import random
-
-from leachUI import Ui_MainWindow
-import how_it_worksUI 
-import leachAboutUI
-import leachWelcomeUI
+import argparse
 
 
 leachability_path = None
@@ -43,79 +31,45 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
-class WelcomeWindow(QtWidgets.QMainWindow, leachWelcomeUI.Ui_MainWindow):
-    def __init__(self):
-        # label figure taken from: https://opentextbc.ca/geology/chapter/5-4-weathering-and-the-formation-of-soil/
-        super().__init__()
-        self.setupUi(self)
-        self.version = "0.1.4"
-        self.setWindowTitle("Leaching Calculator - Welcome")
-        self.setWindowIcon(QIcon(resource_path("./icon02.png")))
-        self.pushButton_3.clicked.connect(self.startMain)
-        self.pushButton_2.clicked.connect(self.close)
-        self.label_3.setPixmap(QPixmap(resource_path("./imeLogo.png")))
-        self.label.setPixmap(QPixmap(resource_path("./image3.jpg")))
-        self.label_4.setText(u"<html><head/><body><p><span style=\" font-size:18pt; font-weight:600; color:#ffffff;\">Leaching Calculator - v"+self.version+"</span></p><p><span style=\" color:#ffffff;\"><br/><br/><br/></span></p></body></html>")
 
+class LeachCalc_CLI():
+    def __init__(self,input_array):
 
-    def startMain(self):
-        mainWindow = MainWindow()
-        mainWindow.show()
-        self.close()
-
-
-class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setupUi(self)
-        self.setWindowTitle("Leaching Calculator")
-        self.setWindowIcon(QIcon(resource_path("./icon02.png")))
+        print("valid input")
         self.dt50_a = [1,2,3,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,95,100,105,115,120,125,135,145,155,165,175,185,205,225,245,265,285,305,325,345,365]
         self.koc_a = [0,2,4,6,8,10,20,40,60,80,100,200,400,600,800,1000,2000,4000,6000,8000,10000]  
-        self.subst_name = self.lineEdit.text()
-        self.label_5.setText("within [0; 10,000]")
-        self.label_6.setText("within [1; 365]")
-        self.lineEdit.setPlaceholderText("Insert substance name")
+        self.koc_setRange = [min(self.koc_a), 10000]
+        self.dt50_setRange = [min(self.dt50_a), max(self.dt50_a)]
+
+        if len(input_array.input)==3:
+            self.subst_name = [input_array.input[0]]
+            koc = [float(input_array.input[1])]
+            dt50 = [float(input_array.input[2])]
+        elif len(input_array.input)==1:
+            filename = input_array.input[0]
+            try:
+                self.subst_name, koc, dt50 = self.readInputFile(filename)
+            except ValueError:
+                sys.exit()
+        try:
+            os.mkdir(leachability_path+"/results/")
+        except FileExistsError:
+            pass
+
+        rep_file = "results/reports.txt"
+        with open(rep_file,'w') as f:
+            f.write("# Report file created "+datetime.now().strftime("%d.%m.%y - %H:%M")+"\n")
+            f.write("# Substance name\tKoc\tDegT50\tLeaching\tMobility\n")
+
         self.dataTable()
+        self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
+        if input_array.plot:
+            self.plotInit( width=3.5, height=3.0,dpi=100)
+            #self.pdf = backend_pdf.PdfPages("./.pdf")
+       # self.plot(newdt50, newkoc, newdata)
 
-        #widgets
-        self.doubleSpinBox.setRange(min(self.koc_a), 10000)
-        self.doubleSpinBox_2.setRange(min(self.dt50_a), max(self.dt50_a))
-        self.info_how_window = None
-        self.info_about_window = None
-        self.figure_window = None
-        self.m = PlotCanvas(parent=self.widget,  width=3.5, height=3.0,dpi=100)
-        self.m.move(0,0)
-       # self.figure = plt.figure()
-       # self.canvas = FigureCanvas(self.figure)
-       # self.button = QtWidgets.QPushButton('Plot')
-       # self.button.clicked.connect(self.leachingPlot)
-       # layout = QtWidgets.QVBoxLayout()
-       # layout.addWidget(self.canvas)
-       # layout.addWidget(self.button)
-       # self.setLayout(layout)
-#        self.sc = MplCanvas(self.centralwidget, width=5,height=4, dpi=100)
-#        self.sc.axes.plot([0,1,2,3,4],[10,2,3,4,40])
-#        self.label_6.setGeometry(QRect(210, 102, 131, 16))
-#        print(self.sc)
-
-        #signals
-        self.doubleSpinBox.valueChanged.connect(lambda: self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text()))
-        self.doubleSpinBox_2.valueChanged.connect(lambda: self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text()))
-        self.lineEdit.textChanged.connect(lambda: self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text()))
-        self.doubleSpinBox.valueChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
-        self.doubleSpinBox_2.valueChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
-        self.lineEdit.textChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
-
-        self.pushButton.clicked.connect(self.close)
-        self.pushButton_2.clicked.connect(lambda: pyperclip.copy(self.textEdit.toPlainText()))
-        self.pushButton_3.clicked.connect(self.saveFig)
-        self.actionHow_it_works.setText("What it does")
-        self.actionHow_it_works.triggered.connect(self.info_how)
-        self.actionAbout.triggered.connect(self.info_about)
 
         #calls
-        self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text())
         newdt50 = self.dt50_a
         newdt50 = np.linspace(min(self.dt50_a),max(self.dt50_a),1000)
         newkoc = self.koc_a
@@ -123,33 +77,48 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         newkoc = np.logspace(0,4.00,1000)
         newdata = self.data_table
         newdata = self.interpolated(newkoc,newdt50)
-        self.m.plot(newdt50, newkoc, newdata)
+        for isub in range(len(self.subst_name)):
+            res_perc, mobility, res_report = self.result(koc[isub],dt50[isub],self.subst_name[isub])
+            with open(rep_file,'a') as f:
+                f.write(self.subst_name[isub] + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)) + "\t" + mobility + "\n")
+                if input_array.report:
+                    f.write(res_report+"\n\n")
 
-    def rePlot(self):
-        return
+ 
+            if input_array.plot:
+                
+                self.plot(newdt50, newkoc, newdata)
+                self.setCross(koc[isub],dt50[isub],self.subst_name[isub])
+                self.saveFig(self.subst_name[isub]+"_"+str(koc[isub])+"_"+str(dt50[isub])+".png")
+        
+        if input_array.plot:
+            print("plots created in results folder")
+        if input_array.report:
+            print("reports created in results folder")
 
-    def saveFig(self):
-        savename, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Leaching Calculator Save ", "", "Image Files (*.png *.jpg *.pdf)", options=QtWidgets.QFileDialog.Options())
-        print(savename)
-        self.m.fig.savefig(savename,dpi=300)
+    def readInputFile(self,filename):
+        lines = None
+        substances = []
+        kocs = []
+        dt50s = []
+        with open(filename,"r") as f:
+            lines = f.readlines()
+        for line in lines:
+            data = line.replace("\n","").split("\t")
+            if self.koc_setRange[0] < float(data[1]) < self.koc_setRange[1] and\
+                self.dt50_setRange[0] < float(data[2]) < self.dt50_setRange[1]:
+                substances.append(data[0])
+                kocs.append(float(data[1]))
+                dt50s.append(float(data[2]))
+            else:
+                print(data[0]+"'s input not in valid range: Koc in [0;10,000] mL/g, DegT50 in [0;365] d")
+
+        return substances,kocs,dt50s
+        
+
+    def saveFig(self,savename):
+        self.fig.savefig("results/"+savename,dpi=300)
         pass
-
-
-    def info_how(self):
-        if not self.info_how_window:
-            self.info_how_window = HowItWorksWindow(parent=self)
-        else:
-            pass
-        self.info_how_window.show()
-        self.info_how_window.pushButton_2.clicked.connect(self.copyTable)
-
-    def info_about(self):
-        if not self.info_about_window:
-            self.info_about_window = AboutWindow(parent=self)
-        else:
-            pass
-        self.info_about_window.show()
-
 
     def dataTable(self):
         """
@@ -184,7 +153,7 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
 
         return
 
-    def copyTable(self):
+    def writeTable(self):
         tableStr = "KOC\\DT50"
         for dt50 in self.dt50_a:
             tableStr += "\t" + str(dt50)
@@ -194,21 +163,20 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
             for j in range(len(self.dt50_a)):
                 tableStr += "\t" + str(self.data_table[i][j])
 
-        pyperclip.copy(tableStr)
         return
 
-    def interpolate(self,dt50,koc,subst):
-        self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
+    def result(self,dt50,koc,subst):
+#        self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
 #        interpolated = RectBivariateSpline(self.dt50_a,self.koc_a,  self.data_table)
-        result = self.interpolated(koc,dt50)[0][0]
+        result_perc = self.interpolated(koc,dt50)[0][0]
         mobility = None
         reason = None
         color = None
-        if result < 0.01:
-            mobility = "immobile"
+        if result_perc < 0.01:
+            mobility = "not mobile"
             reason = "lower than 1%"
             color = "rgb(0,255,0)"
-        elif 0.01 <= result <= 0.1:
+        elif 0.01 <= result_perc <= 0.1:
             mobility = "mobile"
             reason = "between 1% and 10%"
             color = "rgb(255,255,0)"
@@ -219,55 +187,16 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         
         if subst =="":
             subst = "..."
-        self.label_7.setText(" "+mobility)
-        self.label_7.setStyleSheet("background-color: "+color+";")
-        self.textEdit.setText("With a KOC of "+str(koc) + " mL/g and a DT50 of " + str(dt50) + " d "\
-        + str(round(result*100,2))+" % of the substance could probably leach to a depth of 1m. Since the leaching is "+reason+" " + subst + " is considered "+mobility + ".")
-        return
+        result_text = ("With a KOC of "+str(koc) + " mL/g and a DT50 of " + str(dt50) + " d "\
+        + str(round(result_perc*100,2))+" % of the substance could probably leach to a depth of 1m.\nSince the leaching is "+reason+" " + subst + " is considered "+mobility + ".")
+        return result_perc, mobility, result_text
 
 
-class HowItWorksWindow(QtWidgets.QMainWindow, how_it_worksUI.Ui_MainWindow):
-    def __init__(self,parent=None):
-        super().__init__(parent)
-        self.parentWindow = parent
-        self.setupUi(self)
-        self.setWindowTitle("Leaching Calculator - What it does")
-        self.pushButton.clicked.connect(self.close)
-        self.textEdit.setStyleSheet("background-color: rgb(240,240,240);")
-
-class AboutWindow(QtWidgets.QMainWindow, leachAboutUI.Ui_MainWindow):
-    def __init__(self,parent=None):
-        super().__init__(parent)
-        self.parentWindow = parent
-        self.setupUi(self)
-        self.version = "0.1.4"
-        self.setWindowTitle("Leaching Calculator - About")
-        self.label_4.setText(u"<html><head/><body><p><span style=\" font-size:18pt; font-weight:600; color:#ffffff;\">Leaching Calculator - v"+self.version+"</span></p><p><span style=\" color:#ffffff;\"><br/><br/><br/></span></p></body></html>")
-        self.pushButton_2.clicked.connect(self.close)
-        self.label_3.setPixmap(QPixmap(resource_path("./imeLogo.png")))
-        self.label.setPixmap(QPixmap(resource_path("./image3.jpg")))
-
-#class MplCanvas(FigureCanvasAgg):
-#    def __init__(self,parent=None, width=5,height=4,dpi=200):
-#        fig = Figure(figsize=(width,height), dpi=dpi)
-#        self.axes = fig.add_subplot(111)
-#        super(MplCanvas, self).__init__(fig)
 
 
-class PlotCanvas(FigureCanvas):
-
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
-        self.fig = Figure(figsize=(width, height), dpi=dpi)
+    def plotInit(self, width=5, height=4, dpi=100):
+        self.fig,self.axes = plt.subplots(1,1,figsize=(width, height), dpi=dpi)
         self.fig.tight_layout()
-        self.axes = self.fig.add_subplot(111)
-
-        FigureCanvas.__init__(self, self.fig)
-        self.setParent(parent)
-
-        FigureCanvas.setSizePolicy(self,
-                QtWidgets.QSizePolicy.Expanding,
-                QtWidgets.QSizePolicy.Expanding)
-        FigureCanvas.updateGeometry(self)
 
 
     def plot(self,x,y,data):
@@ -323,13 +252,13 @@ class PlotCanvas(FigureCanvas):
             subst = "..."
         self.axes.set_title("Mobility of "+subst)
         self.axes.set_xlabel("KOC in mL/g")
-        self.axes.set_ylabel("DT50 in d")
+        self.axes.set_ylabel("DegT50 in d")
 #        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('green'),label="immobile"))
 #        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('yellow'),label="mobile"))
 #        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('red'),label="very mobile"))
         self.axes.plot([x],[y],marker="x",color='purple',markersize=8)
         legend_elements = [\
-            Rectangle((-1,-1),.1,.1,color=('green'),label="immobile"),\
+            Rectangle((-1,-1),.1,.1,color=('green'),label="not mobile"),\
             Rectangle((-1,-1),.1,.1,color=('yellow'),label="mobile"),\
             Rectangle((-1,-1),.1,.1,color=('red'),label="very mobile"),\
             Line2D([0], [0], marker = "x", color="purple", label=subst, ls="")
@@ -342,10 +271,44 @@ class PlotCanvas(FigureCanvas):
         self.fig.tight_layout()
 ##
         self.axes.margins(-0.001)
-        self.draw()
+        #self.draw()
 
-app = QtWidgets.QApplication(sys.argv)
 
-window = WelcomeWindow()
-window.show()
-sys.exit(app.exec())
+
+parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil")
+parser.add_argument('input', nargs='+', help="input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name")
+parser.add_argument('-p','--plot',action='store_true',help="if set, plot(s) are created")
+parser.add_argument('-r','--report',action='store_true',help="if set, report text(s) are created")
+args = parser.parse_args()
+
+correct_input = True
+if len(args.input) == 3:
+    # input is a list with a name and two floats
+    name = args.input[0]
+    try:
+        float1 = float(args.input[1])
+        float2 = float(args.input[2])
+    except ValueError:
+        parser.print_help()
+        print("\n#### You need to pass floats for Koc and DegT50")
+        correct_input = False
+elif len(args.input) == 1:
+    # input is a file name
+    file_name = args.input[0]
+    try:
+        with open(file_name,'r') as f:
+            pass
+    except FileNotFoundError:
+        parser.print_help()
+        print("\n#### You need to pass an existing file")
+        correct_input = False
+else:
+    parser.print_help()
+    print("\n#### Not a valid input style. Possible calls:\n#### python3 leachCalc_CLI.py -r -p subst1 200 200 \n#### or\n#### python3 leachCalc_CLI.py -r -p data\\testfile.txt")
+    correct_input = False
+
+if correct_input:
+    args = parser.parse_args()
+    app = LeachCalc_CLI(args)
+else:
+    pass

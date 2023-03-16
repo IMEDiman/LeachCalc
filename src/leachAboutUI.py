@@ -18,6 +18,8 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QLabel, QMainWindow, QMenuBar,
     QPushButton, QSizePolicy, QStatusBar, QWidget)
 
+import os
+
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
@@ -31,11 +33,11 @@ class Ui_MainWindow(object):
         self.label = QLabel(self.centralwidget)
         self.label.setObjectName(u"label")
         self.label.setGeometry(QRect(10, 95, 541, 301))
-        self.label.setPixmap(QPixmap(u"image3.jpg"))
+        self.label.setPixmap(QPixmap(u"./data/image3.jpg"))
         self.label_3 = QLabel(self.centralwidget)
         self.label_3.setObjectName(u"label_3")
         self.label_3.setGeometry(QRect(10, -5, 181, 61))
-        self.label_3.setPixmap(QPixmap(u"../../CA/figs/imeLogo.png"))
+        self.label_3.setPixmap(QPixmap(u"./data/imeLogo.png"))
         self.label_4 = QLabel(self.centralwidget)
         self.label_4.setObjectName(u"label_4")
         self.label_4.setGeometry(QRect(210, 44, 341, 51))
