@@ -28,6 +28,7 @@ import src.leachAboutUI as leachAboutUI
 import src.leachWelcomeUI as leachWelcomeUI
 import src.leachListUI as leachListUI
 from leachCalc_CLI import LeachCalc_CLI
+from data.version import version
 
 
 leachability_path = None
@@ -50,7 +51,7 @@ class WelcomeWindow(QtWidgets.QMainWindow, leachWelcomeUI.Ui_MainWindow):
         # label figure taken from: https://opentextbc.ca/geology/chapter/5-4-weathering-and-the-formation-of-soil/
         super().__init__()
         self.setupUi(self)
-        self.version = "0.1.4"
+        self.version = version
         self.setWindowTitle("Leaching Calculator - Welcome")
         self.setWindowIcon(QIcon(resource_path("./data/icon02.png")))
         self.pushButton_3.clicked.connect(self.startMain)
@@ -340,7 +341,7 @@ class AboutWindow(QtWidgets.QMainWindow, leachAboutUI.Ui_MainWindow):
         super().__init__(parent)
         self.parentWindow = parent
         self.setupUi(self)
-        self.version = "0.1.4"
+        self.version = version
         self.setWindowTitle("Leaching Calculator - About")
         self.label_4.setText(u"<html><head/><body><p><span style=\" font-size:18pt; font-weight:600; color:#ffffff;\">Leaching Calculator - v"+self.version+"</span></p><p><span style=\" color:#ffffff;\"><br/><br/><br/></span></p></body></html>")
         self.pushButton_2.clicked.connect(self.close)

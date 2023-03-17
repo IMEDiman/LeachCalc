@@ -6,6 +6,7 @@ font = {'size'   : 7}
 
 import numpy as np
 import argparse
+from data.version import version
 
 
 leachability_path = None
@@ -302,11 +303,11 @@ class LeachCalc_CLI():
 
 
 if __name__ == "__main__":
-    try:
-        with open("version.txt",'r') as f:
-            version = f.readline()
-    except FileNotFoundError:
-        version = "version not found"
+#    try:
+#        with open("version.txt",'r') as f:
+#            version = f.readline()
+#    except FileNotFoundError:
+#        version = "version not found"
     parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil",prog='LEACHCALC')
     parser.add_argument('input', nargs='+', help="input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name")
     parser.add_argument('-p','--plot',action='store_true',help="if set, plot(s) are created")
