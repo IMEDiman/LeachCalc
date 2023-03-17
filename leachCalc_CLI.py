@@ -1,17 +1,9 @@
 import sys
 import os
 from scipy.interpolate import RectBivariateSpline
-import matplotlib
 from datetime import datetime
 font = {'size'   : 7}
 
-matplotlib.rc('font', **font)
-from matplotlib.figure import Figure
-from matplotlib.backends import backend_pdf
-from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
-from matplotlib import ticker
-import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 
@@ -43,8 +35,15 @@ class LeachCalc_CLI():
 
         if len(input_array.input)==3:
             self.subst_name = [input_array.input[0]]
-            koc = [float(input_array.input[1])]
-            dt50 = [float(input_array.input[2])]
+            if self.koc_setRange[0] < float(input_array.input[1]) < self.koc_setRange[1] and\
+                self.dt50_setRange[0] < float(input_array.input[2])  < self.dt50_setRange[1]:
+                koc = [float(input_array.input[1])]
+                dt50 = [float(input_array.input[2])]
+            else:
+                print(input_array.input[0]+"'s input not in valid range: Koc in [0;10,000] mL/g, DegT50 in [0;365] d")
+                print("type LEACHCALC_CLI.exe -h or python3 LeachCalc.py -h, respectively, for help")
+                sys.exit()
+
         elif len(input_array.input)==1:
             filename = input_array.input[0]
             try:
@@ -60,11 +59,13 @@ class LeachCalc_CLI():
         with open(rep_file,'w') as f:
             f.write("# Report file created "+datetime.now().strftime("%d.%m.%y - %H:%M")+"\n")
             f.write("# Substance name\tKoc\tDegT50\tLeaching\tMobility\n")
-            print("# Substance name\tKoc\tDegT50\tLeaching\tMobility\n")
+            print("### Results ###")
+            print("Substance name\t\tKoc\tDegT50\tLeaching   Mobility")
 
         self.dataTable()
         self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
         if input_array.plot:
+
             self.plotInit( width=3.5, height=3.0,dpi=100)
             #self.pdf = backend_pdf.PdfPages("./.pdf")
        # self.plot(newdt50, newkoc, newdata)
@@ -82,7 +83,11 @@ class LeachCalc_CLI():
             res_perc, mobility, res_report = self.result(koc[isub],dt50[isub],self.subst_name[isub])
             with open(rep_file,'a') as f:
                 f.write(self.subst_name[isub] + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)) + "\t" + mobility + "\n")
-                print(self.subst_name[isub] + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)) + "\t" + mobility + "\n")
+                if len(self.subst_name[isub]) > 20:
+                    substname = self.subst_name[isub][:20]+"..."
+                else:
+                    substname = self.subst_name[isub]
+                print(substname.ljust(22) + "\t" + str(koc[isub]) + "\t" + str(dt50[isub]) + "\t" + str(round(res_perc*100,2)).ljust(8) + "   " + mobility + "")
                 if input_array.report:
                     f.write(res_report+"\n\n")
 
@@ -93,6 +98,7 @@ class LeachCalc_CLI():
                 self.setCross(koc[isub],dt50[isub],self.subst_name[isub])
                 self.saveFig(self.subst_name[isub]+"_"+str(koc[isub])+"_"+str(dt50[isub])+".png")
         
+        print("###############")
         if input_array.plot:
             print("plots created in results folder")
         if input_array.report:
@@ -106,15 +112,27 @@ class LeachCalc_CLI():
         with open(filename,"r") as f:
             lines = f.readlines()
         for line in lines:
-            data = line.replace("\n","").split("\t")
+            print([line])
+            if line[0] == "#":
+                continue
+            try:
+                data = line.replace("\n","").split("\t")
+                a,b,c = (data[0],float(data[1]),float(data[2]))
+            except Exception as e:
+                print(e)
+                continue
             if self.koc_setRange[0] < float(data[1]) < self.koc_setRange[1] and\
                 self.dt50_setRange[0] < float(data[2]) < self.dt50_setRange[1]:
+                #substances.append(data[0].replace("/","-").replace("\\","-"))
                 substances.append(data[0])
                 kocs.append(float(data[1]))
                 dt50s.append(float(data[2]))
             else:
                 print(data[0]+"'s input not in valid range: Koc in [0;10,000] mL/g, DegT50 in [0;365] d")
 
+                print("substances",substances,kocs,dt50s)
+
+        print("return")
         return substances,kocs,dt50s
         
 
@@ -167,10 +185,10 @@ class LeachCalc_CLI():
 
         return
 
-    def result(self,dt50,koc,subst):
+    def result(self,koc,dt50,subst):
 #        self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
 #        interpolated = RectBivariateSpline(self.dt50_a,self.koc_a,  self.data_table)
-        result_perc = self.interpolated(koc,dt50)[0][0]
+        result_perc = max(0.0,self.interpolated(koc,dt50)[0][0])
         mobility = None
         reason = None
         color = None
@@ -197,6 +215,10 @@ class LeachCalc_CLI():
 
 
     def plotInit(self, width=5, height=4, dpi=100):
+        import matplotlib
+        matplotlib.rc('font', **font)
+        import matplotlib.pyplot as plt
+
         self.fig,self.axes = plt.subplots(1,1,figsize=(width, height), dpi=dpi)
         self.fig.tight_layout()
 
@@ -214,6 +236,9 @@ class LeachCalc_CLI():
         self.setCross(0,1)
 
     def setCross(self,x,y,subst="..."):
+        from matplotlib.lines import Line2D
+        from matplotlib.patches import Rectangle
+
         try:
             self.fig.delaxes(self.axes)
         except AttributeError:
@@ -276,43 +301,48 @@ class LeachCalc_CLI():
         #self.draw()
 
 
-with open("version.txt",'r') as f:
-    version = f.readline()
-parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil",prog='LEACHCALC')
-parser.add_argument('input', nargs='+', help="input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name")
-parser.add_argument('-p','--plot',action='store_true',help="if set, plot(s) are created")
-parser.add_argument('-r','--report',action='store_true',help="if set, report text(s) are created")
-parser.add_argument('-v','--version',action='version',version='%(prog)s '+version,help="show version and exit")
-args = parser.parse_args()
-
-correct_input = True
-if len(args.input) == 3:
-    # input is a list with a name and two floats
-    name = args.input[0]
+if __name__ == "__main__":
     try:
-        float1 = float(args.input[1])
-        float2 = float(args.input[2])
-    except ValueError:
-        parser.print_help()
-        print("\n#### You need to pass floats for Koc and DegT50")
-        correct_input = False
-elif len(args.input) == 1:
-    # input is a file name
-    file_name = args.input[0]
-    try:
-        with open(file_name,'r') as f:
-            pass
+        with open("version.txt",'r') as f:
+            version = f.readline()
     except FileNotFoundError:
-        parser.print_help()
-        print("\n#### You need to pass an existing file")
-        correct_input = False
-else:
-    parser.print_help()
-    print("\n#### Not a valid input style. Possible calls:\n#### python3 leachCalc_CLI.py -r -p subst1 200 200 \n#### or\n#### python3 leachCalc_CLI.py -r -p data\\testfile.txt")
-    correct_input = False
-
-if correct_input:
+        version = "version not found"
+    parser = argparse.ArgumentParser(description="Calculate the mobility of a substance in soil",prog='LEACHCALC')
+    parser.add_argument('input', nargs='+', help="input: either a list consisting of a substance's name, its Koc in mL/g and DegT50 in d, or a file name")
+    parser.add_argument('-p','--plot',action='store_true',help="if set, plot(s) are created")
+    parser.add_argument('-r','--report',action='store_true',help="if set, report text(s) are created")
+    parser.add_argument('-v','--version',action='version',version='%(prog)s '+version,help="show version and exit")
     args = parser.parse_args()
-    app = LeachCalc_CLI(args)
-else:
-    pass
+
+    correct_input = True
+    if len(args.input) == 3:
+        # input is a list with a name and two floats
+        name = args.input[0]
+        try:
+            float1 = float(args.input[1])
+            float2 = float(args.input[2])
+        except ValueError:
+            parser.print_help()
+            print("\n#### You need to pass floats for Koc and DegT50")
+            correct_input = False
+    elif len(args.input) == 1:
+        # input is a file name
+        file_name = args.input[0]
+        try:
+            with open(file_name,'r') as f:
+                pass
+        except FileNotFoundError:
+            parser.print_help()
+            print("\n#### You need to pass an existing file")
+            correct_input = False
+    else:
+        parser.print_help()
+        print("\n#### Not a valid input style. Possible calls:\n#### python3 leachCalc_CLI.py -r -p subst1 200 200 \n#### or\n#### python3 leachCalc_CLI.py -r -p data\\testfile.txt")
+        correct_input = False
+
+    if correct_input:
+        args = parser.parse_args()
+        print("args",args)
+        app = LeachCalc_CLI(args)
+    else:
+        pass

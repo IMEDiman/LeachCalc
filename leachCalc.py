@@ -1,10 +1,12 @@
 from PySide6 import QtWidgets 
-from PySide6.QtCore import QDate,  QTime, QRunnable, Slot, Signal, QThreadPool, QObject, Qt, QRect
+from PySide6.QtCore import QDate,  QTime, QRunnable, Slot, Signal, QThreadPool, QObject, Qt, QRect, QThread
 from PySide6.QtGui import Qt,QIcon,QClipboard, QPixmap
 
 import sys
+from datetime import datetime
 import pyperclip
 import os
+import subprocess
 from scipy.interpolate import RectBivariateSpline
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -24,6 +26,8 @@ from src.leachUI import Ui_MainWindow
 import src.how_it_worksUI as how_it_worksUI
 import src.leachAboutUI as leachAboutUI
 import src.leachWelcomeUI as leachWelcomeUI
+import src.leachListUI as leachListUI
+from leachCalc_CLI import LeachCalc_CLI
 
 
 leachability_path = None
@@ -83,6 +87,7 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.doubleSpinBox_2.setRange(min(self.dt50_a), max(self.dt50_a))
         self.info_how_window = None
         self.info_about_window = None
+        self.calculate_list_window = None
         self.figure_window = None
         self.m = PlotCanvas(parent=self.widget,  width=3.5, height=3.0,dpi=100)
         self.m.move(0,0)
@@ -110,6 +115,7 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.pushButton.clicked.connect(self.close)
         self.pushButton_2.clicked.connect(lambda: pyperclip.copy(self.textEdit.toPlainText()))
         self.pushButton_3.clicked.connect(self.saveFig)
+        self.pushButton_4.clicked.connect(self.calculateList)
         self.actionHow_it_works.setText("What it does")
         self.actionHow_it_works.triggered.connect(self.info_how)
         self.actionAbout.triggered.connect(self.info_about)
@@ -151,6 +157,13 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.info_about_window.show()
         self.info_about_window.label_3.setPixmap(QPixmap(resource_path("./data/imeLogo.png")))
         self.info_about_window.label.setPixmap(QPixmap(resource_path("./data/image3.jpg")))
+
+    def calculateList(self):
+        if not self.calculate_list_window:
+            self.calculate_list_window = LeachCalcListWindow(parent=self)
+        else:
+            pass
+        self.calculate_list_window.show()
 
 
     def dataTable(self):
@@ -202,7 +215,7 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
     def interpolate(self,dt50,koc,subst):
         self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
 #        interpolated = RectBivariateSpline(self.dt50_a,self.koc_a,  self.data_table)
-        result = self.interpolated(koc,dt50)[0][0]
+        result = max(0.0,self.interpolated(koc,dt50)[0][0])
         mobility = None
         reason = None
         color = None
@@ -227,6 +240,91 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         + str(round(result*100,2))+" % of the substance could probably leach to a depth of 1m. Since the leaching is "+reason+" " + subst + " is considered "+mobility + ".")
         return
 
+class LeachCalcListWindow(QtWidgets.QMainWindow,leachListUI.Ui_MainWindow):
+    def __init__(self,parent=None):
+        super().__init__(parent)
+        self.parentWindow = parent
+        self.setupUi(self)
+        self.setWindowTitle("Leaching Calculator - Calculate List of Substances")
+        self.pushButton_2.clicked.connect(self.close)
+        self.pushButton_5.clicked.connect(self.fileDialog)
+        self.pushButton_3.clicked.connect(self.openExplorer)
+        self.pushButton.clicked.connect(self.run)
+
+    def fileDialog(self):
+        self.file_name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Leaching Calculator Open","", "Text Files (*.txt)", options=QtWidgets.QFileDialog.Options())
+        if self.file_name:
+            self.lineEdit.setText(self.file_name)
+            self.label.setText("Ready")
+            self.pushButton.setEnabled(True)
+        return
+
+    def run(self):
+        self.thread = QThread(parent=self)
+        self.worker = Worker(self.lineEdit.text(), self.checkBox.isChecked(), self.checkBox_2.isChecked(),parent=self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.worker.err.connect(self.label.setText)
+        self.worker.err.connect(self.worker.quit)
+        self.worker.err.connect(self.thread.quit)
+#        self.worker.err.connect(self.thread.terminate)
+        self.worker.progress.connect(self.label.setText)
+        self.worker.finished.connect(self.label.setText)
+        self.worker.finished.connect(lambda: self.pushButton_3.setEnabled(True))
+        self.thread.start()
+
+
+        return
+
+    def openExplorer(self):
+        subprocess.call(["explorer",leachability_path+"\\results\\"])
+        return
+
+class Worker(QThread):
+    finished = Signal(str)
+    progress = Signal(str)
+    err = Signal(str)
+
+    def __init__(self,filename,make_reports=False,make_plots=False,parent=None):
+        QThread.__init__(self,parent)
+        self.file_name = filename
+        self.make_plots = make_plots
+        self.make_reports = make_reports
+
+    def run(self):
+        self.progress.emit("Calculate...")
+        try:
+            self.calculate()
+        except Exception as e:
+            print(leachability_path)
+            with open(leachability_path+"\\LeachCalc.err", "a") as f:
+                f.write(datetime.now().strftime("%d.%m.%y - %H:%M") + "\n")
+                f.write(str(e) + "\n")
+                f.write("### Please contact the author via https://github.com/IMEDiman/LeachCalc/issues ###\n")
+
+            self.err.emit("Check LeachCalc.err")
+            pass
+        else:
+            self.finished.emit("Done")
+
+    def calculate(self):
+        input_array = CLIinput(self.file_name,self.make_reports,self.make_plots)
+        print("input_array-worker",input_array)
+        self.leach_calc = LeachCalc_CLI(input_array)
+
+
+
+
+class CLIinput():
+    def __init__(self,filename,make_reports,make_plots):
+        self.input = [filename]
+        self.report = make_reports
+        self.plot = make_plots
 
 class HowItWorksWindow(QtWidgets.QMainWindow, how_it_worksUI.Ui_MainWindow):
     def __init__(self,parent=None):
