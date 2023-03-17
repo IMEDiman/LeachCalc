@@ -113,7 +113,6 @@ class LeachCalc_CLI():
         with open(filename,"r") as f:
             lines = f.readlines()
         for line in lines:
-            print([line])
             if line[0] == "#":
                 continue
             try:
@@ -131,9 +130,7 @@ class LeachCalc_CLI():
             else:
                 print(data[0]+"'s input not in valid range: Koc in [0;10,000] mL/g, DegT50 in [0;365] d")
 
-                print("substances",substances,kocs,dt50s)
 
-        print("return")
         return substances,kocs,dt50s
         
 
