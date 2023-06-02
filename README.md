@@ -40,14 +40,14 @@ leachCalc.py opens a graphical user interface. You can run leachCalc.py with
 
     python3 leachCalc.py
 
-Another possiblity for Windows users is to [download](software.ime.fraunhofer.de/https://software.ime.fraunhofer.de/Leaching_Calculator/) a standalone executable which does not need any python installations.
+Another possiblity for Windows users is to [download](https://software.ime.fraunhofer.de/Leaching_Calculator/) a standalone executable which does not need any python installations.
 
 ## leachCalc_CLI.py
 leachCalc_CLI.py is a command line interface. Substance parameters can be passed as arguments such as
 
     python3 leachCalc_CLI.py <substance_name> <koc> <DegT50>
 
-As above, another possiblity for Windows users is to [download](software.ime.fraunhofer.de/https://software.ime.fraunhofer.de/Leaching_Calculator/) a standalone executable which does not need any python installations.
+As above, another possiblity for Windows users is to [download](https://software.ime.fraunhofer.de/Leaching_Calculator/) a standalone executable which does not need any python installations.
 
 
 # USAGE
@@ -71,22 +71,27 @@ Calling leachCalc_CLI with `-h` option shows
       -h, --help    show this help message and exit
       -p, --plot    if set, plot(s) are created
       -r, --report  if set, report text(s) are created
+      -v, --version show version and exit
 
 Possible calls would be
 
     >python3 leachCalc_CLI.py subst1 200 150
+    >python3 leachCalc_CLI.py data\testfile.txt
 
-to calculate the leaching of "subst1" with a Koc = 200 mL/g and a DegT50 = 150 d. In the "newly created" results folder a "reports.txt" will be written with the leaching percentage and the substance's mobility.
+to calculate the leaching of "subst1" with a Koc = 200 mL/g and a DegT50 = 150 d or to calculate the leaching of multiple substances, respectively. In the "newly created" results folder a "reports.txt" will be written with the leaching percentage and the substance's mobility.
 
 The inclusion of the `-r/--report` flag appends a short report text.
 
 When `-p/--plot` is set, plot files are created for each substance.
 
-If the standalone .exe is used, swap `python3 leachCalc_CLI.py` for `LEACHCALC.exe` in the commands.
+If the standalone .exe is used, swap `python3 leachCalc_CLI.py` for `LeachCalc_CLI.exe` in the commands.
 
 # BUG REPORTS
 
 For reporting bugs, asking questions, giving remarks and suggestions, we welcome you to use the issue tracker: https://github.com/IMEDiman/LeachCalc/issues
+
+# KNOWN ISSUES
+- Depending on the security configurations on your system, requesting the information on new LeachCalc updates may fail. 
 
 # CONTACT
 

@@ -7,6 +7,8 @@ __pycache__/
 results/
 *.err
 *.ui
+*versions_requests*
+LC_noUpdate.txt
 
 
 

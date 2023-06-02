@@ -3,10 +3,14 @@ from PySide6.QtCore import QDate,  QTime, QRunnable, Slot, Signal, QThreadPool, 
 from PySide6.QtGui import Qt,QIcon,QClipboard, QPixmap
 
 import sys
+import traceback
 from datetime import datetime
 import pyperclip
 import os
+#import platform
 import subprocess
+import webbrowser
+import requests
 from scipy.interpolate import RectBivariateSpline
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -27,24 +31,11 @@ import src.how_it_worksUI as how_it_worksUI
 import src.leachAboutUI as leachAboutUI
 import src.leachWelcomeUI as leachWelcomeUI
 import src.leachListUI as leachListUI
+import src.leachNewVersionUI as leachNewVersionUI
+from src.utils import resource_path, handler, leachability_path, checkVersion
 from leachCalc_CLI import LeachCalc_CLI
 from data.version import version
 
-
-leachability_path = None
-if getattr(sys, 'frozen', False):
-    leachability_path = os.path.dirname(sys.executable)
-else:
-    leachability_path = os.path.dirname(os.path.abspath(__file__))
-
-def resource_path(relative_path):
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
 
 class WelcomeWindow(QtWidgets.QMainWindow, leachWelcomeUI.Ui_MainWindow):
     def __init__(self):
@@ -54,17 +45,71 @@ class WelcomeWindow(QtWidgets.QMainWindow, leachWelcomeUI.Ui_MainWindow):
         self.version = version
         self.setWindowTitle("Leaching Calculator - Welcome")
         self.setWindowIcon(QIcon(resource_path("./data/icon02.png")))
+        self.new_version_window = None
         self.pushButton_3.clicked.connect(self.startMain)
         self.pushButton_2.clicked.connect(self.close)
         self.label_3.setPixmap(QPixmap(resource_path("./data/imeLogo.png")))
         self.label.setPixmap(QPixmap(resource_path("./data/image3.jpg")))
         self.label_4.setText(u"<html><head/><body><p><span style=\" font-size:18pt; font-weight:600; color:#ffffff;\">Leaching Calculator - v"+self.version+"</span></p><p><span style=\" color:#ffffff;\"><br/><br/><br/></span></p></body></html>")
 
+        # check if dont-annoy-me-again file exists
+        try:
+            with open(leachability_path+"\\LC_noUpdate.txt", "r") as f:
+                pass
+        except FileNotFoundError:
+            if checkVersion() >= 0:
+                self.newVersionWindow()
+            else:
+                pass
+
+    def newVersionWindow(self):
+        if not self.new_version_window:
+            self.new_version_window = NewVersionWindow(parent=self,newv=True)
+        else:
+            pass
+        self.new_version_window.show()
 
     def startMain(self):
         mainWindow = MainWindow()
         mainWindow.show()
         self.close()
+
+class NewVersionWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, leachNewVersionUI.Ui_MainWindow):
+    def __init__(self,parent=None, newv=None):
+        super().__init__(parent)
+        self.setupUi(self)
+        self.setWindowTitle("New version")
+        print(newv)
+        newv = 0
+        if newv == 0:
+            self.label.setText("New version available!")
+            self.pushButton.setEnabled(True)
+        else:
+            if newv == 1:
+                self.label.setText("You have the latest version available!")
+            elif newv >= 2:
+                self.label.setText("software.ime.fraunhofer.de could not be reached!")
+            self.pushButton_2.setText("Close")
+
+            self.pushButton.setEnabled(False)
+        self.pushButton_2.clicked.connect(self.close)
+        self.pushButton_3.clicked.connect(self.dontAnnoyMeAgain)
+        self.pushButton_3.clicked.connect(self.close)
+        self.pushButton.clicked.connect(self.openDownloadUrl)
+        self.pushButton.clicked.connect(self.close)
+    
+    def openDownloadUrl(self):
+        url = "https://software.ime.fraunhofer.de/Leaching_Calculator/"
+        webbrowser.open_new(url)
+        self.close
+        return
+
+    def dontAnnoyMeAgain(self):
+        with open(leachability_path+"\\LC_noUpdate.txt","w") as f:
+            f.write("# If this file is located in the same folder as LeachCalc.exe you will not get automated reminders for updates. \n")
+            f.write("# You can still check for updates yourself in the Main form under 'Info'->'Check Updates'.")
+
+
 
 
 class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
@@ -75,9 +120,11 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.setWindowIcon(QIcon(resource_path("./data/icon02.png")))
         self.dt50_a = [1,2,3,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,95,100,105,115,120,125,135,145,155,165,175,185,205,225,245,265,285,305,325,345,365]
         self.koc_a = [0,2,4,6,8,10,20,40,60,80,100,200,400,600,800,1000,2000,4000,6000,8000,10000]  
+        self.thresholds = [0.001,0.1]
         self.subst_name = self.lineEdit.text()
-        self.label.setText("Koc")
-        self.label_2.setText("DegT50")
+        self.label.setText("Koc in mL/g:")
+#        self.label_2.setText("DegT50\N{SUBSCRIPT TWO}")
+#        self.label_2.setText("DegT50\u209B\u2092\u1D62\u2097")
         self.label_5.setText("within [0; 10,000]")
         self.label_6.setText("within [1; 365]")
         self.lineEdit.setPlaceholderText("Insert substance name")
@@ -86,24 +133,14 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         #widgets
         self.doubleSpinBox.setRange(min(self.koc_a), 10000)
         self.doubleSpinBox_2.setRange(min(self.dt50_a), max(self.dt50_a))
+        self.doubleSpinBox_3.setRange(-np.inf, np.log10(10000))
         self.info_how_window = None
+        self.new_version_window = None
         self.info_about_window = None
         self.calculate_list_window = None
         self.figure_window = None
-        self.m = PlotCanvas(parent=self.widget,  width=3.5, height=3.0,dpi=100)
+        self.m = PlotCanvas(parent=self.widget, thresholds = self.thresholds, width=3.68, height=3.30,dpi=100)
         self.m.move(0,0)
-       # self.figure = plt.figure()
-       # self.canvas = FigureCanvas(self.figure)
-       # self.button = QtWidgets.QPushButton('Plot')
-       # self.button.clicked.connect(self.leachingPlot)
-       # layout = QtWidgets.QVBoxLayout()
-       # layout.addWidget(self.canvas)
-       # layout.addWidget(self.button)
-       # self.setLayout(layout)
-#        self.sc = MplCanvas(self.centralwidget, width=5,height=4, dpi=100)
-#        self.sc.axes.plot([0,1,2,3,4],[10,2,3,4,40])
-#        self.label_6.setGeometry(QRect(210, 102, 131, 16))
-#        print(self.sc)
 
         #signals
         self.doubleSpinBox.valueChanged.connect(lambda: self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text()))
@@ -112,6 +149,9 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.doubleSpinBox.valueChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
         self.doubleSpinBox_2.valueChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
         self.lineEdit.textChanged.connect(lambda: self.m.setCross(self.doubleSpinBox.value(), self.doubleSpinBox_2.value(),self.lineEdit.text()))
+        self.doubleSpinBox_3.editingFinished.connect(lambda: self.logTranslate(direction="log10"))
+        self.doubleSpinBox_3.valueChanged.connect(lambda: print(self.doubleSpinBox_3.value()))
+        self.doubleSpinBox.valueChanged.connect(lambda: self.logTranslate(direction="exp10"))
 
         self.pushButton.clicked.connect(self.close)
         self.pushButton_2.clicked.connect(lambda: pyperclip.copy(self.textEdit.toPlainText()))
@@ -120,6 +160,7 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.actionHow_it_works.setText("What it does")
         self.actionHow_it_works.triggered.connect(self.info_how)
         self.actionAbout.triggered.connect(self.info_about)
+        self.actionCheck_for_Updates.triggered.connect(self.newVersion)
 
         #calls
         self.interpolate(self.doubleSpinBox_2.value(), self.doubleSpinBox.value(),self.lineEdit.text())
@@ -127,11 +168,24 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         newdt50 = np.linspace(min(self.dt50_a),max(self.dt50_a),1000)
         newkoc = self.koc_a
         newkoc = np.logspace(0,2.85,1000)
-        newkoc = np.logspace(0,4.00,1000)
+        newkoc = np.logspace(0,4.00,500)
         newdata = self.data_table
         newdata = self.interpolated(newkoc,newdt50)
         self.m.plot(newdt50, newkoc, newdata)
 
+    def logTranslate(self,direction="exp10"):
+        if direction == "log10":
+            self.doubleSpinBox.setValue(10**(self.doubleSpinBox_3.value()))
+        else:
+            self.doubleSpinBox_3.setValue(np.log10(self.doubleSpinBox.value()))
+#        if self.doubleSpinBox_3.value() == -np.inf :
+#            self.doubleSpinBox_3.setValue(-2)
+#        if self.doubleSpinBox_3.stepUp():
+#            print("up")
+
+        print([type(self.doubleSpinBox_3.value())])
+
+        
     def rePlot(self):
         return
 
@@ -141,6 +195,12 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.m.fig.savefig(savename,dpi=300)
         pass
 
+    def newVersion(self):
+        if not self.new_version_window:
+            self.new_version_window = NewVersionWindow(parent=self,newv=checkVersion())
+        else:
+            pass 
+        self.new_version_window.show()
 
     def info_how(self):
         if not self.info_how_window:
@@ -217,28 +277,31 @@ class MainWindow(QtWidgets.QMainWindow, QtWidgets.QDialog, Ui_MainWindow):
         self.interpolated = RectBivariateSpline(self.koc_a, self.dt50_a, self.data_table)
 #        interpolated = RectBivariateSpline(self.dt50_a,self.koc_a,  self.data_table)
         result = max(0.0,self.interpolated(koc,dt50)[0][0])
+        t1 = self.thresholds[0]
+        t2 = self.thresholds[1]
         mobility = None
         reason = None
         color = None
-        if result < 0.01:
+        if result < t1:
             mobility = "not mobile"
-            reason = "lower than 1%"
+            reason = "lower than "+str(t1*100)+"%"
             color = "rgb(0,255,0)"
-        elif 0.01 <= result <= 0.1:
+        elif t1 <= result <= t2:
             mobility = "mobile"
-            reason = "between 1% and 10%"
+            reason = "between "+str(t1*100)+"% and "+str(t2*100)+"%"
             color = "rgb(255,255,0)"
         else:
             mobility = "very mobile"
-            reason = "larger than 10%"
+            reason = "larger than "+str(t2*100)+"%"
             color = "rgb(255,0,0)"
         
         if subst =="":
             subst = "..."
         self.label_7.setText(" "+mobility)
         self.label_7.setStyleSheet("background-color: "+color+";")
-        self.textEdit.setText("With a KOC of "+str(koc) + " mL/g and a DT50 of " + str(dt50) + " d "\
-        + str(round(result*100,2))+" % of the substance could probably leach to a depth of 1m. Since the leaching is "+reason+" " + subst + " is considered "+mobility + ".")
+        print("leach",result)
+        self.textEdit.setText("With a Koc of "+str(koc) + " mL/g and a DegT50_soil of " + str(dt50) + " d " + str(round(result*100,2)) + "% of the substance mass was calculated" \
+                              +" to reach a soil depth of 1 m. Since the leachability is "+reason+" "+ subst+" is considered "+mobility + ".")
         return
 
 class LeachCalcListWindow(QtWidgets.QMainWindow,leachListUI.Ui_MainWindow):
@@ -283,6 +346,7 @@ class LeachCalcListWindow(QtWidgets.QMainWindow,leachListUI.Ui_MainWindow):
         return
 
     def openExplorer(self):
+        print(leachability_path+"\\results\\")
         subprocess.call(["explorer",leachability_path+"\\results\\"])
         return
 
@@ -302,24 +366,19 @@ class Worker(QThread):
         try:
             self.calculate()
         except Exception as e:
-            print(leachability_path)
-            with open(leachability_path+"\\LeachCalc.err", "a") as f:
-                f.write(datetime.now().strftime("%d.%m.%y - %H:%M") + "\n")
-                f.write(str(e) + "\n")
-                f.write("### Please contact the author via https://github.com/IMEDiman/LeachCalc/issues ###\n")
-
+            handler(type(e),e,e.__traceback__)
             self.err.emit("Check LeachCalc.err")
+#            with open(leachability_path+"\\LeachCalc.err", "a") as f:
+#                f.write(datetime.now().strftime("%d.%m.%y - %H:%M") + "\n")
+#                f.write(str(e) + "\n")
+#                f.write("### Please contact the author via https://github.com/IMEDiman/LeachCalc/issues ###\n")
             pass
         else:
             self.finished.emit("Done")
 
     def calculate(self):
         input_array = CLIinput(self.file_name,self.make_reports,self.make_plots)
-        print("input_array-worker",input_array)
         self.leach_calc = LeachCalc_CLI(input_array)
-
-
-
 
 class CLIinput():
     def __init__(self,filename,make_reports,make_plots):
@@ -348,19 +407,13 @@ class AboutWindow(QtWidgets.QMainWindow, leachAboutUI.Ui_MainWindow):
         self.label_3.setPixmap(QPixmap(resource_path("./imeLogo.png")))
         self.label.setPixmap(QPixmap(resource_path("./image3.jpg")))
 
-#class MplCanvas(FigureCanvasAgg):
-#    def __init__(self,parent=None, width=5,height=4,dpi=200):
-#        fig = Figure(figsize=(width,height), dpi=dpi)
-#        self.axes = fig.add_subplot(111)
-#        super(MplCanvas, self).__init__(fig)
-
-
 class PlotCanvas(FigureCanvas):
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+    def __init__(self, parent=None, thresholds=[0.01,0.1], width=5, height=6, dpi=100):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.fig.tight_layout()
         self.axes = self.fig.add_subplot(111)
+        self.thresholds = thresholds
 
         FigureCanvas.__init__(self, self.fig)
         self.setParent(parent)
@@ -391,10 +444,7 @@ class PlotCanvas(FigureCanvas):
 
         self.axes = self.fig.add_subplot(111)
 
-        self.axes.contourf(self.yarr,self.xarr,self.data,levels=[-1,0.01,0.1,1],colors=['green','yellow','red'])
-#        if x<=100:
-#            self.axes.set_xlim(0,150)
-#        elif x<=900:
+        self.axes.contourf(self.yarr,self.xarr,self.data,levels=[-1,self.thresholds[0],self.thresholds[1],1],colors=['green','yellow','red'])
         if x<=900:
             self.axes.set_xlim(0,1000)
         elif 900<x<=2500:
@@ -406,28 +456,11 @@ class PlotCanvas(FigureCanvas):
         else:
             self.axes.set_xscale("log")
 
-#        if y<= 50:
-#            self.axes.set_ylim(0,70)
-
-#        if x <= 900:
-#            self.axes.set_xlim(0,1000)
-#        if 900<x<=2500:
-#            self.axes.set_xlim(0,3000)
-#            self.axes.set_xscale("log")
-#        elif 2500 < x <= 5500:
-#            self.axes.set_xlim(0,6000)
-#
-#        print(self.xarr)
-#        print(np.log(self.yarr))
-#        self.axes.contourf(self.yarr,self.xarr,self.data,levels=[-1,0.01,0.1,1],colors=['green','yellow','red'])
         if subst == "":
             subst = "..."
         self.axes.set_title("Mobility of "+subst)
         self.axes.set_xlabel("Koc in mL/g")
-        self.axes.set_ylabel("DegT50 in d")
-#        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('green'),label="immobile"))
-#        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('yellow'),label="mobile"))
-#        self.axes.add_patch(Rectangle((-1,-1),.1,.1,color=('red'),label="very mobile"))
+        self.axes.set_ylabel(r"DegT50$_{\rm soil}$ in d", fontstyle='normal')
         self.axes.plot([x],[y],marker="x",color='purple',markersize=8)
         legend_elements = [\
             Rectangle((-1,-1),.1,.1,color=('green'),label="not mobile"),\
@@ -435,13 +468,8 @@ class PlotCanvas(FigureCanvas):
             Rectangle((-1,-1),.1,.1,color=('red'),label="very mobile"),\
             Line2D([0], [0], marker = "x", color="purple", label=subst, ls="")
                 ]
-       # if x > 400 and y > 200:
-       #     self.axes.legend(bbox_to_anchor=(0.98,0.28), ncol=1 )
-       # else:
-       #     self.axes.legend(bbox_to_anchor=(0.98,0.98), ncol=1 )
         self.axes.legend(handles = legend_elements, bbox_to_anchor=(0.98,0.98), ncol=1 )
         self.fig.tight_layout()
-##
         self.axes.margins(-0.001)
         self.draw()
 
