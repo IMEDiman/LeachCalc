@@ -103,6 +103,9 @@ Project link: https://github.com/IMEDiman/LeachCalc
 
 The author thanks Michael Klein, Judith Klein and Bernhard Jene for support and fruitful discussions. This project was financed by CropLife Europe in B-1040 Brussels, BELGIUM
 
+# CITE
+Judith Klein, Dimitrios Alexander Skodras, The Leaching Calculator: a tool for predicting leachability within the framework of the new mobility-related hazard classes PMT and vPvM, *Integrated Environmental Assessment and Management*, Volume 21, Issue 6, November 2025, Pages 1465–1470, [https://doi.org/10.1093/inteam/vjaf094](https://doi.org/10.1093/inteam/vjaf094)
+
 # LICENCE
 
 This project is licensed under GNU General Public License. A version of it should be shipped with this file. If not, you can find the text [here](https://www.gnu.org/licenses/gpl-3.0.en.html).
